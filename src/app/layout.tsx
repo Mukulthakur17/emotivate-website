@@ -39,8 +39,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="scroll-smooth">
-      <body className="bg-navy-900 text-offwhite font-sans antialiased overflow-x-hidden">
-        {children}
+      <body className="bg-navy-900 text-offwhite font-sans antialiased">
+        {/* overflow-x on a wrapper (not body) so fixed nav is not clipped in Chrome/WebKit */}
+        <div className="min-h-screen overflow-x-clip">{children}</div>
         <Analytics />
       </body>
     </html>

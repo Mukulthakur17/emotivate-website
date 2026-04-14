@@ -37,13 +37,12 @@ export default function Navbar() {
 
   return (
     <>
-      <motion.nav
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed top-0 left-0 right-0 z-50 transition-all duration-500 backdrop-blur-xl"
+      {/* Plain <nav>: avoid motion y:-100 — Chrome/WebKit can leave fixed headers off-screen if animation/hydration misbehaves. */}
+      <nav
+        className="fixed top-0 left-0 right-0 z-[100] w-full transition-[box-shadow] duration-500 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80 bg-white/95 [transform:translateZ(0)]"
         style={{
-          background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(245,243,248,0.9))",
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(245,243,248,0.95))",
           borderBottom: "1px solid rgba(255,255,255,0.7)",
           boxShadow: isScrolled
             ? "0 4px 16px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.9)"
@@ -119,7 +118,7 @@ export default function Navbar() {
             />
           </button>
         </div>
-      </motion.nav>
+      </nav>
 
       <AnimatePresence>
         {isMobileOpen && (
@@ -128,7 +127,7 @@ export default function Navbar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-40 backdrop-blur-2xl lg:hidden"
+            className="fixed inset-0 z-[90] backdrop-blur-2xl lg:hidden"
             style={{ background: "rgba(28,27,46,0.97)" }}
           >
             <div className="flex flex-col items-center justify-center h-full gap-8 px-8">
