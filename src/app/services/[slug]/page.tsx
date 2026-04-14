@@ -53,39 +53,35 @@ const servicesData: Record<string, ServiceData> = {
     packages: [
       {
         sessions: 1,
-        priceINR: 1500,
-        label: "Single Session",
+        priceINR: 1499,
+        label: "Seed",
         features: [
-          "50-minute session",
+          "1 × 45-minute session",
           "Personalised approach",
-          "Post-session summary",
           "Flexible scheduling",
         ],
       },
       {
         sessions: 4,
-        priceINR: 5000,
-        label: "Growth Package",
+        priceINR: 5499,
+        label: "Bloom",
         features: [
-          "4 × 50-minute sessions",
+          "4 × 45-minute sessions",
           "Structured therapeutic plan",
           "Between-session support",
           "Progress tracking",
-          "Priority scheduling",
         ],
         highlighted: true,
       },
       {
         sessions: 7,
-        priceINR: 7500,
-        label: "Transformation Package",
+        priceINR: 10000,
+        label: "Thrive",
         features: [
-          "7 × 50-minute sessions",
+          "7 × 60-minute sessions",
           "Comprehensive treatment plan",
           "Between-session resources",
           "Progress assessments",
-          "Priority scheduling",
-          "Emergency session access",
         ],
       },
     ],
@@ -101,10 +97,10 @@ const servicesData: Record<string, ServiceData> = {
     packages: [
       {
         sessions: 1,
-        priceINR: 2000,
-        label: "Single Session",
+        priceINR: 1999,
+        label: "Seed",
         features: [
-          "60-minute session",
+          "1 × 60-minute session",
           "Joint assessment",
           "Communication strategies",
           "Flexible scheduling",
@@ -112,28 +108,26 @@ const servicesData: Record<string, ServiceData> = {
       },
       {
         sessions: 4,
-        priceINR: 7000,
-        label: "Connection Package",
+        priceINR: 6999,
+        label: "Bloom",
         features: [
           "4 × 60-minute sessions",
           "Relationship assessment",
           "Structured interventions",
           "Take-home exercises",
-          "Priority scheduling",
         ],
         highlighted: true,
       },
       {
         sessions: 7,
-        priceINR: 10500,
-        label: "Renewal Package",
+        priceINR: 12499,
+        label: "Thrive",
         features: [
           "7 × 60-minute sessions",
           "In-depth relationship work",
           "Communication skill-building",
           "Conflict resolution tools",
           "Progress check-ins",
-          "Priority scheduling",
         ],
       },
     ],
@@ -149,10 +143,10 @@ const servicesData: Record<string, ServiceData> = {
     packages: [
       {
         sessions: 1,
-        priceINR: 1500,
-        label: "Single Session",
+        priceINR: 1000,
+        label: "Seed",
         features: [
-          "45-minute session",
+          "1 × 45-minute session",
           "Age-appropriate approach",
           "Parent consultation included",
           "Flexible scheduling",
@@ -161,27 +155,25 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 4,
         priceINR: 5000,
-        label: "Growth Package",
+        label: "Bloom",
         features: [
           "4 × 45-minute sessions",
           "Tailored treatment plan",
           "Parent guidance sessions",
           "Progress updates",
-          "Priority scheduling",
         ],
         highlighted: true,
       },
       {
         sessions: 7,
-        priceINR: 7500,
-        label: "Foundation Package",
+        priceINR: 9000,
+        label: "Thrive",
         features: [
           "7 × 45-minute sessions",
           "Comprehensive support plan",
           "Regular parent consultations",
           "Skill-building resources",
           "Progress assessments",
-          "Priority scheduling",
         ],
       },
     ],
@@ -196,40 +188,13 @@ const servicesData: Record<string, ServiceData> = {
     accentBg: "rgba(212,160,64,0.1)",
     packages: [
       {
-        sessions: 1,
-        priceINR: 1500,
-        label: "Single Session",
-        features: [
-          "50-minute session",
-          "Career assessment",
-          "Actionable next steps",
-          "Flexible scheduling",
-        ],
-      },
-      {
         sessions: 4,
-        priceINR: 5000,
-        label: "Clarity Package",
+        priceINR: 4999,
+        label: "Career programme",
         features: [
-          "4 × 50-minute sessions",
-          "Comprehensive career mapping",
-          "Strength & values assessment",
-          "Action plan development",
-          "Priority scheduling",
-        ],
-        highlighted: true,
-      },
-      {
-        sessions: 7,
-        priceINR: 7500,
-        label: "Direction Package",
-        features: [
-          "7 × 50-minute sessions",
-          "Full career exploration",
-          "Skill gap analysis",
-          "Transition planning",
-          "Ongoing support & accountability",
-          "Priority scheduling",
+          "4 × 45-minute sessions",
+          "Career assessments",
+          "Structured report",
         ],
       },
     ],
@@ -533,10 +498,16 @@ export default function ServicePage() {
             </div>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div
+            className={
+              service.packages.length === 1
+                ? "max-w-md mx-auto w-full"
+                : "grid md:grid-cols-3 gap-6"
+            }
+          >
             {service.packages.map((pkg, i) => (
               <PricingCard
-                key={pkg.label}
+                key={`${pkg.label}-${i}`}
                 pkg={pkg}
                 index={i}
                 accentColor={service.accentColor}
