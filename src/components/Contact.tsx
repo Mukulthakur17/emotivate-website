@@ -45,7 +45,7 @@ export default function Contact() {
               </p>
 
               <a
-                href="mailto:You.emotivate@gmail.com"
+                href="mailto:you.emotivate@gmail.com"
                 className="group inline-flex items-center gap-2 px-8 py-3.5 bg-offwhite text-white border border-offwhite rounded-full hover:bg-offwhite/90 transition-all duration-500 hover:shadow-lg text-sm tracking-wide mb-8"
               >
                 Contact Us
@@ -66,11 +66,11 @@ export default function Contact() {
 
               <div className="flex flex-wrap items-center justify-center md:justify-between gap-3 md:gap-0 pt-6 border-t border-black/[0.06]">
                 <a
-                  href="mailto:You.emotivate@gmail.com"
+                  href="mailto:you.emotivate@gmail.com"
                   className="text-sm text-[#1A1A2E] hover:text-teal-soft transition-colors duration-300"
                   style={{ fontFamily: "'DM Sans', sans-serif" }}
                 >
-                  You.emotivate@gmail.com
+                  you.emotivate@gmail.com
                 </a>
                 <span className="text-black/15 text-xs hidden md:inline">|</span>
                 <a
