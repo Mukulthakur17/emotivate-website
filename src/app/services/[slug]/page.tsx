@@ -4,9 +4,10 @@ import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useRef, MouseEvent } from "react";
+import { Suspense, useState, useRef, MouseEvent } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import PayPalReturnHandler from "@/components/PayPalReturnHandler";
 
 interface Package {
   sessions: number;
@@ -223,16 +224,19 @@ function PricingCard({
   accentColor,
   accentBg,
   currencyIdx,
+  serviceSlug,
 }: {
   pkg: Package;
   index: number;
   accentColor: string;
   accentBg: string;
   currencyIdx: number;
+  serviceSlug: string;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!cardRef.current) return;
@@ -248,6 +252,29 @@ function PricingCard({
   };
 
   const perSession = pkg.priceINR / pkg.sessions;
+
+  const handleBookPayPal = async () => {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/paypal/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: serviceSlug, packageLabel: pkg.label }),
+      });
+      const data = (await res.json()) as { error?: string; approvalUrl?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Could not start checkout");
+      }
+      if (!data.approvalUrl) {
+        throw new Error("Missing PayPal approval link");
+      }
+      window.location.href = data.approvalUrl;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Checkout failed");
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -347,27 +374,31 @@ function PricingCard({
           ))}
         </div>
 
-        <a
-          href="/#contact"
-          className="block text-center py-3.5 rounded-full text-sm font-medium transition-all duration-300"
+        <button
+          type="button"
+          disabled={checkoutLoading}
+          onClick={handleBookPayPal}
+          className="block w-full text-center py-3.5 rounded-full text-sm font-medium transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-55"
           style={{
             background: "rgba(0,0,0,0.04)",
             color: "#1A1A2E",
             border: "1px solid rgba(0,0,0,0.1)",
           }}
           onMouseEnter={(e) => {
+            if (checkoutLoading) return;
             e.currentTarget.style.background = accentBg;
             e.currentTarget.style.borderColor = `${accentColor}40`;
             e.currentTarget.style.color = accentColor;
           }}
           onMouseLeave={(e) => {
+            if (checkoutLoading) return;
             e.currentTarget.style.background = "rgba(0,0,0,0.04)";
             e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)";
             e.currentTarget.style.color = "#1A1A2E";
           }}
         >
-          Book Now
-        </a>
+          {checkoutLoading ? "Redirecting…" : "Book Now"}
+        </button>
       </div>
     </motion.div>
   );
@@ -401,6 +432,10 @@ export default function ServicePage() {
   return (
     <main style={{ background: "#F0EBE5" }} className="min-h-screen">
       <Navbar />
+
+      <Suspense fallback={null}>
+        <PayPalReturnHandler slug={slug} />
+      </Suspense>
 
       <section
         className="pt-28 pb-12 md:pt-40 md:pb-24 px-6 relative overflow-hidden"
@@ -555,6 +590,7 @@ export default function ServicePage() {
                 accentColor={service.accentColor}
                 accentBg={service.accentBg}
                 currencyIdx={currencyIdx}
+                serviceSlug={slug}
               />
             ))}
           </div>
