@@ -71,11 +71,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const accessToken = await paypalGetAccessToken(clientId, clientSecret, mode);
+    const customId = `${slug}::${packageLabel}`.slice(0, 127);
+    const invoiceId = `evo-${slug}-${Date.now()}`.slice(0, 127);
+
     const { id, approvalUrl } = await paypalCreateOrder(accessToken, mode, {
       amountInr,
       description: `Emotivate — ${slug} — ${packageLabel}`,
       returnUrl,
       cancelUrl,
+      customId,
+      invoiceId,
     });
 
     return NextResponse.json({ approvalUrl, orderId: id });

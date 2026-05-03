@@ -39,6 +39,8 @@ export async function paypalCreateOrder(
     description: string;
     returnUrl: string;
     cancelUrl: string;
+    customId: string;
+    invoiceId: string;
   }
 ): Promise<{ id: string; approvalUrl: string }> {
   const res = await fetch(`${paypalApiBase(mode)}/v2/checkout/orders`, {
@@ -56,6 +58,8 @@ export async function paypalCreateOrder(
             value: params.amountInr,
           },
           description: params.description.slice(0, 127),
+          custom_id: params.customId.slice(0, 127),
+          invoice_id: params.invoiceId.slice(0, 127),
         },
       ],
       application_context: {
@@ -120,4 +124,81 @@ export async function paypalCaptureOrder(
       : "UNKNOWN";
 
   return { status, raw };
+}
+
+export type PayPalOrderDetails = {
+  id: string;
+  payer?: {
+    email_address?: string;
+    name?: { given_name?: string; surname?: string };
+  };
+  purchase_units?: Array<{
+    custom_id?: string;
+    amount?: { currency_code?: string; value?: string };
+  }>;
+};
+
+export async function paypalGetOrder(
+  accessToken: string,
+  mode: PayPalMode,
+  orderId: string
+): Promise<PayPalOrderDetails> {
+  const res = await fetch(
+    `${paypalApiBase(mode)}/v2/checkout/orders/${encodeURIComponent(orderId)}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+  const data = (await res.json()) as PayPalOrderDetails & { message?: string };
+  if (!res.ok) {
+    throw new Error(
+      data.message || `PayPal get order failed (${res.status})`
+    );
+  }
+  if (!data.id) {
+    throw new Error("PayPal get order: missing id");
+  }
+  return data;
+}
+
+export async function paypalVerifyWebhookSignature(
+  accessToken: string,
+  mode: PayPalMode,
+  params: {
+    authAlgo: string;
+    certUrl: string;
+    transmissionId: string;
+    transmissionSig: string;
+    transmissionTime: string;
+    webhookId: string;
+    webhookEvent: unknown;
+  }
+): Promise<boolean> {
+  const res = await fetch(
+    `${paypalApiBase(mode)}/v1/notifications/verify-webhook-signature`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        auth_algo: params.authAlgo,
+        cert_url: params.certUrl,
+        transmission_id: params.transmissionId,
+        transmission_sig: params.transmissionSig,
+        transmission_time: params.transmissionTime,
+        webhook_id: params.webhookId,
+        webhook_event: params.webhookEvent,
+      }),
+    }
+  );
+  const data = (await res.json()) as {
+    verification_status?: string;
+    message?: string;
+  };
+  if (!res.ok) {
+    return false;
+  }
+  return data.verification_status === "SUCCESS";
 }
