@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useRef, MouseEvent } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -22,6 +23,9 @@ interface ServiceData {
   packages: Package[];
   accentColor: string;
   accentBg: string;
+  /** Decorative hero background (Unsplash). */
+  heroImage: string;
+  heroImageAlt: string;
 }
 
 const currencies = [
@@ -50,6 +54,9 @@ const servicesData: Record<string, ServiceData> = {
       "Individual therapy at Emotivate is a deeply personal experience. Whether you're dealing with anxiety, depression, low self-worth, relationship patterns, or simply wanting to understand yourself better — sessions are designed around your specific needs. Using evidence-based approaches in a warm, non-judgmental space, we work together to uncover patterns, build coping strategies, and create meaningful change.",
     accentColor: "#6EA593",
     accentBg: "rgba(110,165,147,0.1)",
+    heroImage:
+      "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1920&q=80",
+    heroImageAlt: "Calm, mindful space suggesting reflection and personal growth",
     packages: [
       {
         sessions: 1,
@@ -94,6 +101,9 @@ const servicesData: Record<string, ServiceData> = {
       "Couples therapy at Emotivate helps partners navigate communication breakdowns, recurring conflicts, trust issues, and emotional disconnection. Sessions create a neutral, supportive space where both partners feel heard. Together, we identify unhealthy patterns, improve how you relate to each other, and build tools for lasting connection.",
     accentColor: "#8E7AB8",
     accentBg: "rgba(142,122,184,0.1)",
+    heroImage:
+      "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=1920&q=80",
+    heroImageAlt: "Two people together, suggesting partnership and connection",
     packages: [
       {
         sessions: 1,
@@ -140,6 +150,9 @@ const servicesData: Record<string, ServiceData> = {
       "Therapy for children and adolescents at Emotivate is adapted to their developmental stage and emotional needs. Whether it's anxiety about school, social struggles, behavioural challenges, or identity exploration — sessions are designed to feel safe, engaging, and age-appropriate. We also work closely with parents to ensure support extends beyond the therapy room.",
     accentColor: "#D4929A",
     accentBg: "rgba(212,146,154,0.1)",
+    heroImage:
+      "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=1920&q=80",
+    heroImageAlt: "Child at play outdoors, suggesting growth and a gentle environment",
     packages: [
       {
         sessions: 1,
@@ -186,6 +199,9 @@ const servicesData: Record<string, ServiceData> = {
       "Career counselling at Emotivate goes beyond resume advice. We explore the deeper patterns — fear of failure, perfectionism, burnout, imposter syndrome — that shape your career decisions. Through structured self-discovery, skill mapping, and actionable planning, you'll gain clarity on your direction and the confidence to pursue it.",
     accentColor: "#D4A040",
     accentBg: "rgba(212,160,64,0.1)",
+    heroImage:
+      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1920&q=80",
+    heroImageAlt: "Calm workspace with natural light, suggesting focus and professional growth",
     packages: [
       {
         sessions: 4,
@@ -386,21 +402,47 @@ export default function ServicePage() {
     <main style={{ background: "#F0EBE5" }} className="min-h-screen">
       <Navbar />
 
-      <section className="pt-28 pb-12 md:pt-40 md:pb-24 px-6 relative" style={{ background: "#E8E2DB" }}>
+      <section
+        className="pt-28 pb-12 md:pt-40 md:pb-24 px-6 relative overflow-hidden"
+        style={{ background: "#E8E2DB" }}
+      >
+        <div className="absolute inset-0 z-0" aria-hidden>
+          <Image
+            src={service.heroImage}
+            alt=""
+            fill
+            className="object-cover object-center scale-105"
+            sizes="100vw"
+            priority
+          />
+          {/* Readability: soften photo so headline and body copy stay AA-friendly */}
+          <div
+            className="absolute inset-0 z-[1]"
+            style={{
+              background: `linear-gradient(180deg, rgba(232,226,219,0.88) 0%, rgba(232,226,219,0.82) 40%, rgba(232,226,219,0.76) 100%), linear-gradient(135deg, rgba(255,255,255,0.35) 0%, transparent 55%)`,
+            }}
+          />
+          <div
+            className="absolute inset-0 z-[1] opacity-[0.22] mix-blend-multiply pointer-events-none"
+            style={{ backgroundColor: service.accentColor }}
+          />
+        </div>
+        <span className="sr-only">{service.heroImageAlt}</span>
+
         <div
-          className="absolute top-0 left-1/2 w-[600px] h-[400px] rounded-full blur-[180px] -translate-x-1/2 opacity-30"
+          className="absolute top-0 left-1/2 w-[600px] h-[400px] rounded-full blur-[180px] -translate-x-1/2 opacity-25 z-[2] pointer-events-none"
           style={{ background: service.accentColor }}
         />
 
-        <div className="max-w-4xl mx-auto relative text-center">
+        <div className="max-w-4xl mx-auto relative z-10 text-center">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
           >
             <Link
-              href="/#services"
-              className="inline-flex items-center gap-2 text-sm text-[#78778A] hover:text-[#1A1A2E] transition-colors duration-300 mb-8"
+              href="/services"
+              className="inline-flex items-center gap-2 text-sm text-[#4a4858] hover:text-[#0e0d18] transition-colors duration-300 mb-8"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -408,10 +450,10 @@ export default function ServicePage() {
               All Services
             </Link>
 
-            <h1 className="text-3xl md:text-6xl font-light tracking-tight text-[#1A1A2E] mb-6">
+            <h1 className="text-3xl md:text-6xl font-light tracking-tight text-[#0e0d18] mb-6">
               {service.title}
             </h1>
-            <p className="text-base md:text-lg text-[#68677A] max-w-2xl mx-auto leading-relaxed">
+            <p className="text-base md:text-lg text-[#2f2e3d] max-w-2xl mx-auto leading-relaxed">
               {service.longDescription}
             </p>
           </motion.div>
