@@ -10,7 +10,6 @@ const navLinks = [
   { href: "#services", label: "Services" },
   { href: "#why", label: "Why Emotivate" },
   { href: "#testimonials", label: "Testimonials" },
-  { href: "#contact", label: "Contact" },
   { href: "#faq", label: "FAQ" },
 ];
 
