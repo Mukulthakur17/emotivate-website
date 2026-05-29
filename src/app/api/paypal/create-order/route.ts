@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PAYPAL_PACKAGE_INR } from "@/data/service-paypal-prices";
+import { inrToUsdCharge } from "@/lib/fx-inr";
 import {
   paypalCreateOrder,
   paypalGetAccessToken,
@@ -67,23 +68,32 @@ export async function POST(req: NextRequest) {
   const returnUrl = `${appUrl}/services/${encodeURIComponent(slug)}?payment=success`;
   const cancelUrl = `${appUrl}/services/${encodeURIComponent(slug)}?payment=cancelled`;
 
-  const amountInr = priceInr.toFixed(2);
-
   try {
+    // PayPal (sandbox / typical business accounts) cannot accept INR, so the
+    // INR price is converted to a USD charge before creating the order.
+    const charge = await inrToUsdCharge(priceInr);
+
     const accessToken = await paypalGetAccessToken(clientId, clientSecret, mode);
     const customId = `${slug}::${packageLabel}`.slice(0, 127);
     const invoiceId = `evo-${slug}-${Date.now()}`.slice(0, 127);
 
     const { id, approvalUrl } = await paypalCreateOrder(accessToken, mode, {
-      amountInr,
-      description: `Emotivate — ${slug} — ${packageLabel}`,
+      amount: charge.value,
+      currencyCode: charge.currencyCode,
+      description:
+        `Emotivate — ${slug} — ${packageLabel} (₹${priceInr})`.slice(0, 127),
       returnUrl,
       cancelUrl,
       customId,
       invoiceId,
     });
 
-    return NextResponse.json({ approvalUrl, orderId: id });
+    return NextResponse.json({
+      approvalUrl,
+      orderId: id,
+      charged: { value: charge.value, currency: charge.currencyCode },
+      priceInr,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "PayPal error";
     return NextResponse.json({ error: message }, { status: 502 });

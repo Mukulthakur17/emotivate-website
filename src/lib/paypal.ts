@@ -6,6 +6,39 @@ export function paypalApiBase(mode: PayPalMode): string {
     : "https://api-m.sandbox.paypal.com";
 }
 
+type PayPalErrorBody = {
+  name?: string;
+  message?: string;
+  debug_id?: string;
+  details?: Array<{ issue?: string; description?: string; field?: string }>;
+};
+
+/**
+ * Builds a human-readable error from a PayPal error response, surfacing the
+ * specific `details[].issue` (e.g. CURRENCY_NOT_SUPPORTED) which the generic
+ * top-level `message` hides.
+ */
+function paypalErrorMessage(
+  status: number,
+  body: PayPalErrorBody,
+  fallback: string
+): string {
+  const parts: string[] = [];
+  if (body.name) parts.push(body.name);
+  if (body.message) parts.push(body.message);
+
+  const detail = body.details?.[0];
+  if (detail?.issue) {
+    parts.push(
+      `[${detail.issue}]${detail.description ? ` ${detail.description}` : ""}`
+    );
+  }
+
+  const base = parts.length ? parts.join(" — ") : fallback;
+  const suffix = body.debug_id ? ` (debug_id: ${body.debug_id})` : "";
+  return `PayPal ${status}: ${base}${suffix}`;
+}
+
 export async function paypalGetAccessToken(
   clientId: string,
   clientSecret: string,
@@ -21,8 +54,16 @@ export async function paypalGetAccessToken(
     body: "grant_type=client_credentials",
   });
   if (!res.ok) {
+    let parsed: PayPalErrorBody = {};
     const text = await res.text();
-    throw new Error(`PayPal auth failed (${res.status}): ${text}`);
+    try {
+      parsed = JSON.parse(text) as PayPalErrorBody;
+    } catch {
+      parsed = { message: text };
+    }
+    throw new Error(
+      paypalErrorMessage(res.status, parsed, "auth failed (check credentials)")
+    );
   }
   const json = (await res.json()) as { access_token?: string };
   if (!json.access_token) {
@@ -35,7 +76,8 @@ export async function paypalCreateOrder(
   accessToken: string,
   mode: PayPalMode,
   params: {
-    amountInr: string;
+    amount: string;
+    currencyCode: string;
     description: string;
     returnUrl: string;
     cancelUrl: string;
@@ -54,8 +96,8 @@ export async function paypalCreateOrder(
       purchase_units: [
         {
           amount: {
-            currency_code: "INR",
-            value: params.amountInr,
+            currency_code: params.currencyCode,
+            value: params.amount,
           },
           description: params.description.slice(0, 127),
           custom_id: params.customId.slice(0, 127),
@@ -75,12 +117,11 @@ export async function paypalCreateOrder(
   const data = (await res.json()) as {
     id?: string;
     links?: { rel: string; href: string }[];
-    message?: string;
-  };
+  } & PayPalErrorBody;
 
   if (!res.ok) {
     throw new Error(
-      data.message || `PayPal create order failed (${res.status})`
+      paypalErrorMessage(res.status, data, "create order failed")
     );
   }
 
@@ -111,11 +152,9 @@ export async function paypalCaptureOrder(
 
   const raw = await res.json();
   if (!res.ok) {
-    const msg =
-      typeof raw === "object" && raw && "message" in raw
-        ? String((raw as { message?: string }).message)
-        : res.statusText;
-    throw new Error(`PayPal capture failed (${res.status}): ${msg}`);
+    throw new Error(
+      paypalErrorMessage(res.status, (raw ?? {}) as PayPalErrorBody, "capture failed")
+    );
   }
 
   const status =
@@ -149,10 +188,10 @@ export async function paypalGetOrder(
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
-  const data = (await res.json()) as PayPalOrderDetails & { message?: string };
+  const data = (await res.json()) as PayPalOrderDetails & PayPalErrorBody;
   if (!res.ok) {
     throw new Error(
-      data.message || `PayPal get order failed (${res.status})`
+      paypalErrorMessage(res.status, data, "get order failed")
     );
   }
   if (!data.id) {
