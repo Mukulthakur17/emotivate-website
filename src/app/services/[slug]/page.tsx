@@ -1,13 +1,14 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Suspense, useState, useRef, MouseEvent } from "react";
+import { Suspense, useState, useRef, useEffect, MouseEvent } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import PayPalReturnHandler from "@/components/PayPalReturnHandler";
+import { CURRENCIES, CHECKOUT_CURRENCIES, isCheckoutSupported } from "@/data/currency-rates";
 
 interface Package {
   sessions: number;
@@ -29,13 +30,7 @@ interface ServiceData {
   heroImageAlt: string;
 }
 
-const currencies = [
-  { code: "INR", symbol: "₹", rate: 1, label: "INR" },
-  { code: "USD", symbol: "$", rate: 0.012, label: "USD" },
-  { code: "GBP", symbol: "£", rate: 0.0095, label: "GBP" },
-  { code: "EUR", symbol: "€", rate: 0.011, label: "EUR" },
-  { code: "AUD", symbol: "A$", rate: 0.018, label: "AUD" },
-];
+const currencies = CURRENCIES;
 
 function formatPrice(inr: number, currencyIdx: number): string {
   const c = currencies[currencyIdx];
@@ -225,6 +220,7 @@ function PricingCard({
   accentBg,
   currencyIdx,
   serviceSlug,
+  onSwitchCurrency,
 }: {
   pkg: Package;
   index: number;
@@ -232,11 +228,19 @@ function PricingCard({
   accentBg: string;
   currencyIdx: number;
   serviceSlug: string;
+  onSwitchCurrency: (code: string) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [showCurrencyWarning, setShowCurrencyWarning] = useState(false);
+
+  const selectedCurrency = currencies[currencyIdx].code;
+
+  useEffect(() => {
+    if (isCheckoutSupported(selectedCurrency)) setShowCurrencyWarning(false);
+  }, [selectedCurrency]);
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!cardRef.current) return;
@@ -255,12 +259,24 @@ function PricingCard({
 
   const handleBookPayPal = async () => {
     if (checkoutLoading) return;
+
+    // Block checkout for currencies not yet enabled for online payment and
+    // prompt the customer to switch to a supported one instead of redirecting.
+    if (!isCheckoutSupported(selectedCurrency)) {
+      setShowCurrencyWarning(true);
+      return;
+    }
+
     setCheckoutLoading(true);
     try {
       const res = await fetch("/api/paypal/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: serviceSlug, packageLabel: pkg.label }),
+        body: JSON.stringify({
+          slug: serviceSlug,
+          packageLabel: pkg.label,
+          currency: selectedCurrency,
+        }),
       });
       const data = (await res.json()) as { error?: string; approvalUrl?: string };
       if (!res.ok) {
@@ -306,8 +322,9 @@ function PricingCard({
           boxShadow: isHovered
             ? `0 20px 40px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)`
             : "0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6)",
-          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) ${isHovered ? "translateY(-6px) scale(1.02)" : "translateY(0) scale(1)"}`,
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) ${isHovered ? "translateY(-6px)" : "translateY(0)"}`,
           transformStyle: "preserve-3d",
+          backfaceVisibility: "hidden",
           transition: "transform 0.3s ease, box-shadow 0.3s ease",
         }}
       >
@@ -373,6 +390,65 @@ function PricingCard({
             </div>
           ))}
         </div>
+
+        <AnimatePresence>
+          {showCurrencyWarning && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: "auto", marginBottom: 16 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div
+                className="rounded-xl p-4 text-left"
+                style={{
+                  background: "rgba(212,160,64,0.08)",
+                  border: "1px solid rgba(212,160,64,0.35)",
+                }}
+              >
+                <p className="text-xs text-[#6b5a2a] leading-relaxed mb-3">
+                  Online payment isn&rsquo;t available in{" "}
+                  <span className="font-semibold">{currencies[currencyIdx].label}</span> yet.
+                  Please choose a supported currency to continue:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {CHECKOUT_CURRENCIES.map((code) => {
+                    const c = currencies.find((x) => x.code === code);
+                    if (!c) return null;
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => {
+                          onSwitchCurrency(code);
+                          setShowCurrencyWarning(false);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200"
+                        style={{
+                          background: "rgba(255,255,255,0.7)",
+                          border: `1px solid ${accentColor}55`,
+                          color: "#1A1A2E",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = accentBg;
+                          e.currentTarget.style.color = accentColor;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "rgba(255,255,255,0.7)";
+                          e.currentTarget.style.color = "#1A1A2E";
+                        }}
+                      >
+                        <span style={{ color: accentColor }}>{c.symbol}</span>
+                        Pay in {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <button
           type="button"
@@ -591,19 +667,14 @@ export default function ServicePage() {
                 accentBg={service.accentBg}
                 currencyIdx={currencyIdx}
                 serviceSlug={slug}
+                onSwitchCurrency={(code) => {
+                  const idx = currencies.findIndex((c) => c.code === code);
+                  if (idx !== -1) setCurrencyIdx(idx);
+                }}
               />
             ))}
           </div>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1, duration: 0.6 }}
-            className="text-center text-xs text-[#9B9AA6] mt-8"
-            style={{ fontFamily: "'DM Sans', sans-serif" }}
-          >
-            Prices shown in {currencies[currencyIdx].label} are approximate conversions. Final billing in INR.
-          </motion.p>
         </div>
       </section>
 

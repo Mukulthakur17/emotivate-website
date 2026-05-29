@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PAYPAL_PACKAGE_INR } from "@/data/service-paypal-prices";
-import { inrToUsdCharge } from "@/lib/fx-inr";
+import {
+  inrToCurrencyCharge,
+  isCheckoutSupported,
+  supportedCurrenciesLabel,
+} from "@/data/currency-rates";
 import {
   paypalCreateOrder,
   paypalGetAccessToken,
@@ -45,6 +49,7 @@ export async function POST(req: NextRequest) {
 
   const slug = (body as { slug?: string }).slug;
   const packageLabel = (body as { packageLabel?: string }).packageLabel;
+  const requestedCurrency = (body as { currency?: string }).currency;
 
   if (typeof slug !== "string" || !slug.trim()) {
     return NextResponse.json({ error: "Missing slug" }, { status: 400 });
@@ -63,15 +68,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown package for this service" }, { status: 400 });
   }
 
+  if (typeof requestedCurrency !== "string" || !isCheckoutSupported(requestedCurrency)) {
+    return NextResponse.json(
+      {
+        error: `Online payment isn't available in that currency yet. Please choose ${supportedCurrenciesLabel()}.`,
+        code: "CURRENCY_NOT_SUPPORTED",
+      },
+      { status: 400 }
+    );
+  }
+
   const mode = resolveMode();
   const appUrl = resolveAppUrl(req);
   const returnUrl = `${appUrl}/services/${encodeURIComponent(slug)}?payment=success`;
   const cancelUrl = `${appUrl}/services/${encodeURIComponent(slug)}?payment=cancelled`;
 
   try {
-    // PayPal (sandbox / typical business accounts) cannot accept INR, so the
-    // INR price is converted to a USD charge before creating the order.
-    const charge = await inrToUsdCharge(priceInr);
+    // Charge in the currency the customer selected (USD/EUR/GBP/AUD), using the
+    // same fixed rates the UI displays so the PayPal total matches the on-screen
+    // price. PayPal can't accept INR, so an INR selection falls back to USD.
+    const charge = inrToCurrencyCharge(
+      priceInr,
+      typeof requestedCurrency === "string" ? requestedCurrency : "USD"
+    );
 
     const accessToken = await paypalGetAccessToken(clientId, clientSecret, mode);
     const customId = `${slug}::${packageLabel}`.slice(0, 127);
@@ -93,6 +112,7 @@ export async function POST(req: NextRequest) {
       orderId: id,
       charged: { value: charge.value, currency: charge.currencyCode },
       priceInr,
+      currencyFellBackToUsd: charge.fellBack,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "PayPal error";
