@@ -1,18 +1,19 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { useParams } from "next/navigation";
+import { motion } from "framer-motion";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Suspense, useState, useRef, useEffect, MouseEvent } from "react";
+import { Suspense, useState, useRef, MouseEvent } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import PayPalReturnHandler from "@/components/PayPalReturnHandler";
-import { CURRENCIES, CHECKOUT_CURRENCIES, isCheckoutSupported } from "@/data/currency-rates";
+import { CURRENCIES } from "@/data/currency-rates";
 
 interface Package {
   sessions: number;
   priceINR: number;
+  priceUSD: number;
   label: string;
   features: string[];
   highlighted?: boolean;
@@ -32,13 +33,12 @@ interface ServiceData {
 
 const currencies = CURRENCIES;
 
-function formatPrice(inr: number, currencyIdx: number): string {
+function formatPrice(inrAmount: number, usdAmount: number, currencyIdx: number): string {
   const c = currencies[currencyIdx];
-  const converted = inr * c.rate;
   if (c.code === "INR") {
-    return `${c.symbol}${converted.toLocaleString("en-IN")}`;
+    return `${c.symbol}${Math.round(inrAmount).toLocaleString("en-IN")}`;
   }
-  return `${c.symbol}${converted.toFixed(converted < 100 ? 2 : 0)}`;
+  return `${c.symbol}${Number.isInteger(usdAmount) ? usdAmount : usdAmount.toFixed(2)}`;
 }
 
 const servicesData: Record<string, ServiceData> = {
@@ -57,6 +57,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 1,
         priceINR: 1499,
+        priceUSD: 20,
         label: "Seed",
         features: [
           "1 × 45-minute session",
@@ -67,6 +68,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 4,
         priceINR: 5499,
+        priceUSD: 70,
         label: "Bloom",
         features: [
           "4 × 45-minute sessions",
@@ -79,6 +81,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 7,
         priceINR: 10000,
+        priceUSD: 125,
         label: "Thrive",
         features: [
           "7 × 60-minute sessions",
@@ -104,6 +107,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 1,
         priceINR: 1999,
+        priceUSD: 25,
         label: "Seed",
         features: [
           "1 × 60-minute session",
@@ -115,6 +119,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 4,
         priceINR: 6999,
+        priceUSD: 90,
         label: "Bloom",
         features: [
           "4 × 60-minute sessions",
@@ -127,6 +132,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 7,
         priceINR: 12499,
+        priceUSD: 160,
         label: "Thrive",
         features: [
           "7 × 60-minute sessions",
@@ -152,7 +158,8 @@ const servicesData: Record<string, ServiceData> = {
     packages: [
       {
         sessions: 1,
-        priceINR: 1000,
+        priceINR: 1500,
+        priceUSD: 20,
         label: "Seed",
         features: [
           "1 × 45-minute session",
@@ -164,6 +171,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 4,
         priceINR: 5000,
+        priceUSD: 65,
         label: "Bloom",
         features: [
           "4 × 45-minute sessions",
@@ -176,6 +184,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 7,
         priceINR: 9000,
+        priceUSD: 110,
         label: "Thrive",
         features: [
           "7 × 45-minute sessions",
@@ -202,6 +211,7 @@ const servicesData: Record<string, ServiceData> = {
       {
         sessions: 4,
         priceINR: 4999,
+        priceUSD: 65,
         label: "Career programme",
         features: [
           "4 × 45-minute sessions",
@@ -220,7 +230,6 @@ function PricingCard({
   accentBg,
   currencyIdx,
   serviceSlug,
-  onSwitchCurrency,
 }: {
   pkg: Package;
   index: number;
@@ -228,19 +237,14 @@ function PricingCard({
   accentBg: string;
   currencyIdx: number;
   serviceSlug: string;
-  onSwitchCurrency: (code: string) => void;
 }) {
+  const router = useRouter();
   const cardRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [showCurrencyWarning, setShowCurrencyWarning] = useState(false);
 
   const selectedCurrency = currencies[currencyIdx].code;
-
-  useEffect(() => {
-    if (isCheckoutSupported(selectedCurrency)) setShowCurrencyWarning(false);
-  }, [selectedCurrency]);
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!cardRef.current) return;
@@ -255,41 +259,20 @@ function PricingCard({
     setTilt({ x: 0, y: 0 });
   };
 
-  const perSession = pkg.priceINR / pkg.sessions;
+  const perSessionINR = pkg.priceINR / pkg.sessions;
+  const perSessionUSD = pkg.priceUSD / pkg.sessions;
 
-  const handleBookPayPal = async () => {
+  const handleBookPayPal = () => {
     if (checkoutLoading) return;
 
-    // Block checkout for currencies not yet enabled for online payment and
-    // prompt the customer to switch to a supported one instead of redirecting.
-    if (!isCheckoutSupported(selectedCurrency)) {
-      setShowCurrencyWarning(true);
-      return;
-    }
-
+    // Both currencies go through the intermediate checkout page. USD continues
+    // to PayPal; INR is routed to the booking (Google) form from there.
     setCheckoutLoading(true);
-    try {
-      const res = await fetch("/api/paypal/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: serviceSlug,
-          packageLabel: pkg.label,
-          currency: selectedCurrency,
-        }),
-      });
-      const data = (await res.json()) as { error?: string; approvalUrl?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "Could not start checkout");
-      }
-      if (!data.approvalUrl) {
-        throw new Error("Missing PayPal approval link");
-      }
-      window.location.href = data.approvalUrl;
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Checkout failed");
-      setCheckoutLoading(false);
-    }
+    router.push(
+      `/services/${encodeURIComponent(serviceSlug)}/checkout?package=${encodeURIComponent(
+        pkg.label
+      )}&currency=${encodeURIComponent(selectedCurrency)}`
+    );
   };
 
   return (
@@ -358,7 +341,7 @@ function PricingCard({
               className="text-3xl md:text-4xl font-light text-[#1A1A2E]"
               style={{ fontFamily: "'DM Sans', sans-serif" }}
             >
-              {formatPrice(pkg.priceINR, currencyIdx)}
+              {formatPrice(pkg.priceINR, pkg.priceUSD, currencyIdx)}
             </motion.span>
           </div>
           <motion.p
@@ -369,7 +352,7 @@ function PricingCard({
             className="text-xs text-[#9B9AA6] mt-1"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
           >
-            {formatPrice(perSession, currencyIdx)}/session
+            {formatPrice(perSessionINR, perSessionUSD, currencyIdx)}/session
           </motion.p>
         </div>
 
@@ -390,65 +373,6 @@ function PricingCard({
             </div>
           ))}
         </div>
-
-        <AnimatePresence>
-          {showCurrencyWarning && (
-            <motion.div
-              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-              animate={{ opacity: 1, height: "auto", marginBottom: 16 }}
-              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div
-                className="rounded-xl p-4 text-left"
-                style={{
-                  background: "rgba(212,160,64,0.08)",
-                  border: "1px solid rgba(212,160,64,0.35)",
-                }}
-              >
-                <p className="text-xs text-[#6b5a2a] leading-relaxed mb-3">
-                  Online payment isn&rsquo;t available in{" "}
-                  <span className="font-semibold">{currencies[currencyIdx].label}</span> yet.
-                  Please choose a supported currency to continue:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {CHECKOUT_CURRENCIES.map((code) => {
-                    const c = currencies.find((x) => x.code === code);
-                    if (!c) return null;
-                    return (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => {
-                          onSwitchCurrency(code);
-                          setShowCurrencyWarning(false);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200"
-                        style={{
-                          background: "rgba(255,255,255,0.7)",
-                          border: `1px solid ${accentColor}55`,
-                          color: "#1A1A2E",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = accentBg;
-                          e.currentTarget.style.color = accentColor;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "rgba(255,255,255,0.7)";
-                          e.currentTarget.style.color = "#1A1A2E";
-                        }}
-                      >
-                        <span style={{ color: accentColor }}>{c.symbol}</span>
-                        Pay in {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         <button
           type="button"
@@ -473,7 +397,7 @@ function PricingCard({
             e.currentTarget.style.color = "#1A1A2E";
           }}
         >
-          {checkoutLoading ? "Redirecting…" : "Book Now"}
+          {checkoutLoading ? "Continuing…" : "Book Now"}
         </button>
       </div>
     </motion.div>
@@ -485,8 +409,6 @@ export default function ServicePage() {
   const slug = params.slug as string;
   const service = servicesData[slug];
   const [currencyIdx, setCurrencyIdx] = useState(0);
-  const [currencyOpen, setCurrencyOpen] = useState(false);
-
   if (!service) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#F0EBE5" }}>
@@ -584,70 +506,40 @@ export default function ServicePage() {
               <span style={{ color: service.accentColor }}>package</span>
             </h2>
 
-            {/* Currency selector */}
-            <div className="relative inline-block">
-              <button
-                onClick={() => setCurrencyOpen(!currencyOpen)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-300"
-                style={{
-                  fontFamily: "'DM Sans', sans-serif",
-                  background: "linear-gradient(145deg, rgba(255,255,255,0.8), rgba(0,0,0,0.02))",
-                  border: "1.5px solid rgba(0,0,0,0.1)",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6)",
-                  color: "#1A1A2E",
-                }}
-              >
-                <span style={{ color: service.accentColor }}>{currencies[currencyIdx].symbol}</span>
-                {currencies[currencyIdx].label}
-                <svg className="w-3.5 h-3.5 text-[#9B9AA6]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                  style={{ transform: currencyOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s ease" }}
+            {/* Currency toggle */}
+            <div
+              role="radiogroup"
+              aria-label="Display currency"
+              className="relative inline-flex items-center p-1 rounded-full"
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                background: "linear-gradient(145deg, rgba(255,255,255,0.85), rgba(0,0,0,0.03))",
+                border: "1.5px solid rgba(0,0,0,0.1)",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6)",
+              }}
+            >
+              {/* Sliding highlight */}
+              <motion.span
+                aria-hidden
+                className="absolute top-1 bottom-1 left-1 rounded-full"
+                style={{ width: "calc(50% - 4px)", background: service.accentColor }}
+                initial={false}
+                animate={{ x: currencyIdx === 0 ? "0%" : "100%" }}
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              />
+              {currencies.map((c, i) => (
+                <button
+                  key={c.code}
+                  role="radio"
+                  aria-checked={currencyIdx === i}
+                  onClick={() => setCurrencyIdx(i)}
+                  className="relative z-10 inline-flex items-center justify-center gap-1.5 min-w-[92px] px-6 py-2 rounded-full text-sm font-medium transition-colors duration-300"
+                  style={{ color: currencyIdx === i ? "#fff" : "#4A4A5A" }}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {currencyOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute top-full left-1/2 -translate-x-1/2 mt-2 py-2 rounded-xl z-50 min-w-[160px]"
-                  style={{
-                    background: "rgba(255,255,255,0.95)",
-                    backdropFilter: "blur(16px)",
-                    border: "1.5px solid rgba(0,0,0,0.08)",
-                    boxShadow: "0 8px 30px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.05)",
-                  }}
-                >
-                  {currencies.map((c, i) => (
-                    <button
-                      key={c.code}
-                      onClick={() => { setCurrencyIdx(i); setCurrencyOpen(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-200 text-left"
-                      style={{
-                        fontFamily: "'DM Sans', sans-serif",
-                        background: currencyIdx === i ? service.accentBg : "transparent",
-                        color: currencyIdx === i ? service.accentColor : "#4A4A5A",
-                        fontWeight: currencyIdx === i ? 600 : 400,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (currencyIdx !== i) e.currentTarget.style.background = "rgba(0,0,0,0.03)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (currencyIdx !== i) e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <span className="w-6 text-center font-medium" style={{ color: service.accentColor }}>{c.symbol}</span>
-                      <span>{c.label}</span>
-                      {currencyIdx === i && (
-                        <svg className="w-3.5 h-3.5 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: service.accentColor }}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
+                  <span>{c.symbol}</span>
+                  {c.label}
+                </button>
+              ))}
             </div>
           </motion.div>
 
@@ -667,13 +559,21 @@ export default function ServicePage() {
                 accentBg={service.accentBg}
                 currencyIdx={currencyIdx}
                 serviceSlug={slug}
-                onSwitchCurrency={(code) => {
-                  const idx = currencies.findIndex((c) => c.code === code);
-                  if (idx !== -1) setCurrencyIdx(idx);
-                }}
               />
             ))}
           </div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center text-sm italic text-[#78778A] mt-10 max-w-xl mx-auto"
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Our team will reach out to you after payment confirmation to arrange
+            your session slotting.
+          </motion.p>
 
         </div>
       </section>

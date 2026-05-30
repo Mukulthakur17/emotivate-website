@@ -72,6 +72,53 @@ export async function paypalGetAccessToken(
   return json.access_token;
 }
 
+export type PayPalPayerInput = {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  address?: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    countryCode?: string;
+  };
+};
+
+/** Maps our payer input to the PayPal `payer` object, omitting empty fields. */
+function buildPayer(payer?: PayPalPayerInput): Record<string, unknown> | undefined {
+  if (!payer) return undefined;
+  const out: Record<string, unknown> = {};
+
+  if (payer.fullName?.trim()) {
+    const parts = payer.fullName.trim().split(/\s+/);
+    const given = parts.shift() ?? "";
+    const surname = parts.join(" ");
+    out.name = { given_name: given, surname: surname || given };
+  }
+  if (payer.email?.trim()) out.email_address = payer.email.trim();
+
+  const nationalNumber = payer.phone?.replace(/\D/g, "");
+  if (nationalNumber && nationalNumber.length >= 5) {
+    out.phone = {
+      phone_type: "MOBILE",
+      phone_number: { national_number: nationalNumber.slice(0, 14) },
+    };
+  }
+
+  const a = payer.address;
+  if (a && (a.line1 || a.postalCode) && a.countryCode) {
+    const addr: Record<string, string> = { country_code: a.countryCode };
+    if (a.line1?.trim()) addr.address_line_1 = a.line1.trim().slice(0, 300);
+    if (a.city?.trim()) addr.admin_area_2 = a.city.trim().slice(0, 120);
+    if (a.state?.trim()) addr.admin_area_1 = a.state.trim().slice(0, 120);
+    if (a.postalCode?.trim()) addr.postal_code = a.postalCode.trim().slice(0, 60);
+    out.address = addr;
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
 export async function paypalCreateOrder(
   accessToken: string,
   mode: PayPalMode,
@@ -83,8 +130,11 @@ export async function paypalCreateOrder(
     cancelUrl: string;
     customId: string;
     invoiceId: string;
+    payer?: PayPalPayerInput;
   }
 ): Promise<{ id: string; approvalUrl: string }> {
+  const payer = buildPayer(params.payer);
+
   const res = await fetch(`${paypalApiBase(mode)}/v2/checkout/orders`, {
     method: "POST",
     headers: {
@@ -104,9 +154,11 @@ export async function paypalCreateOrder(
           invoice_id: params.invoiceId.slice(0, 127),
         },
       ],
+      ...(payer ? { payer } : {}),
       application_context: {
         brand_name: "Emotivate",
         landing_page: "NO_PREFERENCE",
+        shipping_preference: "NO_SHIPPING",
         user_action: "PAY_NOW",
         return_url: params.returnUrl,
         cancel_url: params.cancelUrl,
